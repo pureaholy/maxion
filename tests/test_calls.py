@@ -219,3 +219,73 @@ def test_vcp_produces_aiortc_ice_servers():
     assert len(turn["urls"]) == 2
     assert turn["username"] == "1788075417:1125900224277751"
     assert turn["credential"] == "BOTa/4/dak8="
+
+
+# --- протокол сигнализации OK externcalls (снято с живого звонка) ----------
+
+
+def test_ok_commands_build_client_messages():
+    from maxion.calls import Commands, media_settings
+
+    c = Commands()
+    accept = c.accept_call()
+    assert accept["command"] == "accept-call"
+    assert accept["sequence"] == 1
+    assert set(accept["mediaSettings"]) == {
+        "isAudioEnabled", "isVideoEnabled", "isScreenSharingEnabled",
+        "isFastScreenSharingEnabled", "isAudioSharingEnabled",
+    }
+
+    # sequence растёт
+    assert c.change_media_settings(media_settings(video=True))["sequence"] == 2
+    assert c.update_media_modifiers(denoise=True)["sequence"] == 3
+
+
+def test_ok_transmit_sdp_and_candidate():
+    from maxion.calls import Commands
+
+    c = Commands()
+    sdp = c.transmit_sdp(1125899939828522, "v=0\r\n", participant_type="USER")
+    assert sdp["command"] == "transmit-data"
+    assert sdp["participantId"] == 1125899939828522
+    assert sdp["data"]["sdp"]["sdp"] == "v=0\r\n"
+    assert sdp["data"]["sdp"]["p2pRelay"] is True
+
+    ice = c.transmit_candidate(42, "candidate:1 1 udp ...")
+    assert ice["data"]["candidate"]["candidate"].startswith("candidate:")
+
+
+def test_ok_parse_incoming_sdp():
+    from maxion.calls import parse_message
+
+    # форма из реального дампа
+    msg = parse_message({
+        "stamp": 1788047236751000001,
+        "peerId": {"id": 41827132202, "type": "WEB_TRANSPORT"},
+        "data": {"sdp": {"type": "offer", "sdp": "v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\n"}},
+    })
+    assert msg.peer_id == 41827132202
+    assert msg.peer_type == "WEB_TRANSPORT"
+    assert msg.sdp["type"] == "offer"
+    assert msg.sdp["sdp"].startswith("v=0")
+    assert msg.candidate is None
+
+
+def test_ok_parse_incoming_candidate():
+    from maxion.calls import parse_message
+
+    msg = parse_message({
+        "stamp": 1788047236751000002,
+        "peerId": {"id": 41827132202, "type": "WEB_TRANSPORT"},
+        "data": {"candidate": {"candidate": "candidate:468136283 1 udp 658217562 1.2.3.4 43210 typ host"}},
+    })
+    assert msg.candidate.startswith("candidate:468136283")
+    assert msg.sdp is None
+
+
+def test_ok_custom_data_carries_stats():
+    from maxion.calls import Commands
+
+    msg = Commands().custom_data({"sdk": {"rtt": 0.0, "loss": 0.0}})
+    assert msg["command"] == "custom-data"
+    assert msg["data"]["sdk"]["rtt"] == 0.0

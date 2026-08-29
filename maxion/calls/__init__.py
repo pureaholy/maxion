@@ -22,6 +22,7 @@
 
 from __future__ import annotations
 
+from .okrtc import Commands, OkRtcChannel, OkRtcMessage, media_settings, parse_message
 from .signaling import (
     CallConfig,
     IceSignal,
@@ -40,6 +41,11 @@ __all__ = [
     "ice_servers_from",
     "CallConfig",
     "parse_vcp",
+    "Commands",
+    "OkRtcMessage",
+    "parse_message",
+    "media_settings",
+    "OkRtcChannel",
     "CallSession",
 ]
 
