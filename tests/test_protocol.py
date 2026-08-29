@@ -164,3 +164,38 @@ def test_empty_body_does_not_stall_the_stream():
     packet, consumed = Packet.parse_stream((empty + following)[consumed:])
     assert packet.opcode == Opcode.CHATS_LIST
     assert packet.payload == {"marker": 5}
+
+
+def test_call_model_exposes_fields_recovered_from_the_client():
+    """Состав полей снят с DTO параметров разговора в клиенте 26.29.1."""
+    from maxion.raw.types import Call
+
+    call = Call(
+        {
+            "conversationId": "abc-123",
+            "callerId": 7,
+            "chatId": -42,
+            "turnServer": {"urls": ["turn:example"], "username": "u"},
+            "sdpOffer": "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\n",
+            "type": "VIDEO",
+            "isContact": True,
+            "country": "RU",
+        }
+    )
+
+    assert call.conversation_id == "abc-123"
+    assert call.id == "abc-123"           # id падает на conversationId
+    assert call.caller_id == 7 and call.initiator_id == 7
+    assert call.chat_id == -42
+    assert call.turn_server["urls"] == ["turn:example"]
+    assert call.sdp_offer.startswith("v=0")
+    assert call.type == "VIDEO" and call.is_video
+    assert call.is_contact is True
+    assert call.country == "RU"
+
+
+def test_call_audio_type_is_not_video():
+    from maxion.raw.types import Call
+
+    assert Call({"type": "AUDIO"}).is_video is False
+    assert Call({"callType": "AUDIO"}).type == "AUDIO"

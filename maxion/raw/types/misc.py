@@ -74,17 +74,65 @@ class Story(Model):
 
 
 class Call(Model):
+    """Параметры звонка.
+
+    Состав полей восстановлен из клиента ``ru.oneme.app`` 26.29.1: DTO
+    параметров разговора печатает себя как ``{conversationId, callerId,
+    chatId, turnServer, sdpOffer, type}``, расширенный вариант добавляет
+    ``callType``, ``isContact`` и ``country``.
+
+    Дальше звонок идёт мимо опкодов MAX: медиа — стоковый WebRTC
+    (``libjingle_peerconnection``), сигнализация — JSON-сообщения типов
+    ``sdp``/``candidate``/``signaling``. Библиотека покрывает только
+    сигнальные опкоды: начать, войти, положить трубку, прочитать журнал.
+    """
+
     @property
     def id(self) -> str | None:
         return self._str("id", "conversationId", "callId")
+
+    @property
+    def conversation_id(self) -> str | None:
+        """Идентификатор разговора — им оперирует медиа-часть."""
+        return self._str("conversationId")
 
     @property
     def chat_id(self) -> int | None:
         return self._int("chatId")
 
     @property
+    def caller_id(self) -> int | None:
+        """Кто звонит."""
+        return self._int("callerId", "initiatorId", "userId")
+
+    @property
     def initiator_id(self) -> int | None:
-        return self._int("initiatorId", "userId")
+        """Синоним :attr:`caller_id`."""
+        return self.caller_id
+
+    @property
+    def type(self) -> str | None:
+        """``AUDIO`` или ``VIDEO``."""
+        return self._str("type", "callType")
+
+    @property
+    def turn_server(self) -> Any:
+        """Параметры TURN/STUN для установки медиа-соединения."""
+        return self.raw.get("turnServer")
+
+    @property
+    def sdp_offer(self) -> str | None:
+        """SDP-предложение вызывающей стороны, если сервер его прислал."""
+        return self._str("sdpOffer")
+
+    @property
+    def is_contact(self) -> bool | None:
+        value = self.raw.get("isContact")
+        return bool(value) if value is not None else None
+
+    @property
+    def country(self) -> str | None:
+        return self._str("country")
 
     @property
     def started_at(self) -> datetime | None:
@@ -96,7 +144,7 @@ class Call(Model):
 
     @property
     def is_video(self) -> bool:
-        return bool(self.raw.get("video"))
+        return self.type == "VIDEO" or bool(self.raw.get("video"))
 
     @property
     def join_link(self) -> str | None:
