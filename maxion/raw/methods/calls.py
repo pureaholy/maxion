@@ -33,9 +33,25 @@ class CallMethods(MethodsBase):
         conversation_id: str | None = None,
         callee_ids: list[int] | None = None,
         video: bool = True,
-        internal_params: dict[str, Any] | None = None,
+        internal_params: dict[str, Any] | str | None = None,
     ) -> Call | None:
-        """VIDEO_CHAT_START_ACTIVE (78). Активный звонок в чате или с людьми."""
+        """VIDEO_CHAT_START_ACTIVE (78). Начинает звонок людям или в чате.
+
+        Схема сверена с живым звонком ``ru.oneme.app`` 26.29.1::
+
+            conversationId  UUID новой сессии
+            calleeIds       кому звоним, список id
+            isVideo         аудио или видео
+            internalParams  JSON-СТРОКА: {protocolVersion, platform, deviceId,
+                            sdkVersion, clientAppKey, capabilities}
+
+        ``internal_params`` можно передать словарём — он сам сериализуется в
+        строку, как это делает клиент.
+        """
+        if isinstance(internal_params, dict):
+            import json as _json
+
+            internal_params = _json.dumps(internal_params, separators=(",", ":"))
         payload = await self.invoke(
             Opcode.VIDEO_CHAT_START_ACTIVE,
             clean(

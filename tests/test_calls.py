@@ -170,3 +170,52 @@ async def test_empty_candidate_is_ignored():
         assert await session.feed_signal({"type": "CANDIDATE", "candidate": ""}) is None
     finally:
         await session.close()
+
+
+# --- vcp: параметры звонка, снятые с живого звонка -------------------------
+
+# Реальный vcp из NOTIF_CALL_START (ru.oneme.app 26.29.1), токены обрезаны.
+REAL_VCP = None
+try:
+    import base64, lz4.block, json as _json
+    _cfg = {
+        "tkn": "TESTTOKEN=", "wse": "wss://videowebrtc.okcdn.ru/ws2",
+        "wsip": ["155.212.204.11"], "wte": "https://videowebrtc.okcdn.ru:23456/wt",
+        "vcae": "https://calls.okcdn.ru", "srcp": "one_me", "et": 1788046797,
+        "stne": "stun:155.212.199.159:19302",
+        "trne": "turn:155.212.199.159:19302,turn:155.212.205.82:19302",
+        "trnu": "1788075417:1125900224277751", "trnp": "BOTa/4/dak8=", "iv": False,
+    }
+    _body = _json.dumps(_cfg).encode()
+    _packed = base64.b64encode(lz4.block.compress(_body, store_size=False)).decode()
+    REAL_VCP = f"{len(_body)}:{_packed}"
+except ImportError:
+    pass
+
+
+@pytest.mark.skipif(REAL_VCP is None, reason="нужен lz4")
+def test_parse_vcp_recovers_call_infrastructure():
+    from maxion.calls import parse_vcp
+
+    cfg = parse_vcp(REAL_VCP)
+
+    assert cfg.signaling_url == "wss://videowebrtc.okcdn.ru/ws2"
+    assert cfg.token == "TESTTOKEN="
+    assert cfg.stun == "stun:155.212.199.159:19302"
+    assert cfg.turn.startswith("turn:")
+    assert cfg.turn_username == "1788075417:1125900224277751"
+    assert cfg.api_url == "https://calls.okcdn.ru"
+    assert cfg.is_video is False
+
+
+@pytest.mark.skipif(REAL_VCP is None, reason="нужен lz4")
+def test_vcp_produces_aiortc_ice_servers():
+    from maxion.calls import parse_vcp
+
+    servers = parse_vcp(REAL_VCP).ice_servers()
+
+    assert {"urls": ["stun:155.212.199.159:19302"]} in servers
+    turn = next(s for s in servers if s["urls"][0].startswith("turn:"))
+    assert len(turn["urls"]) == 2
+    assert turn["username"] == "1788075417:1125900224277751"
+    assert turn["credential"] == "BOTa/4/dak8="

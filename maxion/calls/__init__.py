@@ -23,11 +23,13 @@
 from __future__ import annotations
 
 from .signaling import (
+    CallConfig,
     IceSignal,
     SdpSignal,
     SignalType,
     ice_servers_from,
     parse_signal,
+    parse_vcp,
 )
 
 __all__ = [
@@ -36,6 +38,8 @@ __all__ = [
     "IceSignal",
     "parse_signal",
     "ice_servers_from",
+    "CallConfig",
+    "parse_vcp",
     "CallSession",
 ]
 

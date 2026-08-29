@@ -118,6 +118,92 @@ def parse_signal(data: dict[str, Any]) -> SdpSignal | IceSignal | dict[str, Any]
     return data
 
 
+@dataclass
+class CallConfig:
+    """Расшифрованные параметры звонка (поле ``vcp`` из NOTIF_CALL_START).
+
+    Формат снят с живого звонка ``ru.oneme.app`` 26.29.1: строка вида
+    ``"<len>:<base64>"``, где base64 — LZ4-сжатый JSON. Внутри — вся
+    инфраструктура WebRTC-звонка на CDN Одноклассников.
+    """
+
+    #: Токен авторизации сигнального канала (``tkn``).
+    token: str
+    #: WebSocket-эндпоинт сигнализации (``wse``), напр.
+    #: ``wss://videowebrtc.okcdn.ru/ws2``.
+    signaling_url: str
+    #: STUN-сервер (``stne``).
+    stun: str | None = None
+    #: TURN-серверы через запятую (``trne``).
+    turn: str | None = None
+    #: Логин и пароль TURN (``trnu`` / ``trnp``).
+    turn_username: str | None = None
+    turn_credential: str | None = None
+    #: HTTP API звонков (``vcae``), напр. ``https://calls.okcdn.ru``.
+    api_url: str | None = None
+    #: Видео-звонок (``iv``).
+    is_video: bool = False
+    #: Момент истечения токена, unix-время (``et``).
+    expires_at: int | None = None
+    #: Всё остальное сырьё — на случай новых полей.
+    raw: dict[str, Any] = field(default_factory=dict)
+
+    def ice_servers(self) -> list[dict[str, Any]]:
+        """Собирает STUN и TURN в список ICE-серверов для aiortc."""
+        servers: list[dict[str, Any]] = []
+        if self.stun:
+            servers.append({"urls": [u.strip() for u in self.stun.split(",") if u.strip()]})
+        if self.turn:
+            server: dict[str, Any] = {
+                "urls": [u.strip() for u in self.turn.split(",") if u.strip()]
+            }
+            if self.turn_username:
+                server["username"] = self.turn_username
+            if self.turn_credential:
+                server["credential"] = self.turn_credential
+            servers.append(server)
+        return servers
+
+
+def parse_vcp(vcp: str) -> CallConfig:
+    """Расшифровывает поле ``vcp`` из :class:`NOTIF_CALL_START`.
+
+    ``"<uncompressed_len>:<base64(lz4(json))>"`` -> :class:`CallConfig`.
+    """
+    import base64
+
+    if ":" not in vcp:
+        raise ValueError("vcp без префикса длины")
+    prefix, b64 = vcp.split(":", 1)
+    try:
+        size = int(prefix)
+    except ValueError as exc:
+        raise ValueError(f"неверный префикс длины vcp: {prefix!r}") from exc
+
+    raw = base64.b64decode(b64 + "===")
+    try:
+        import lz4.block
+    except ImportError as exc:  # pragma: no cover
+        raise RuntimeError("для разбора vcp нужен lz4: pip install lz4") from exc
+    body = lz4.block.decompress(raw, uncompressed_size=size)
+
+    import json as _json
+
+    data = _json.loads(body)
+    return CallConfig(
+        token=str(data.get("tkn", "")),
+        signaling_url=str(data.get("wse", "")),
+        stun=data.get("stne"),
+        turn=data.get("trne"),
+        turn_username=data.get("trnu"),
+        turn_credential=data.get("trnp"),
+        api_url=data.get("vcae"),
+        is_video=bool(data.get("iv")),
+        expires_at=data.get("et"),
+        raw=data,
+    )
+
+
 def ice_servers_from(turn_server: Any) -> list[dict[str, Any]]:
     """Приводит присланный сервером ``turnServer`` к списку ICE-серверов.
 
