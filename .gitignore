@@ -43,3 +43,6 @@ tests/test_tools.py
 tests/test_mitm_addon.py
 tests/test_opcodes_apk.py
 tests/test_payloads_apk.py
+
+# дамп трафика со звонком (внутри реальные данные)
+calldump/
