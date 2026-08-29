@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "maxion"
-version = "0.1.1"
+version = "0.1.2"
 description = "Клиент мессенджера MAX: юзербот-библиотека на Python"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -40,6 +40,8 @@ Issues = "https://github.com/pureaholy/maxion/issues"
 [project.optional-dependencies]
 # Инструменты разбора протокола лежат в репозитории (tools/), в пакет не входят.
 re = ["mitmproxy>=10.0", "androguard>=4.1"]
+# Звонки: WebRTC-медиа (тяжёлые нативные зависимости, потому отдельно).
+calls = ["aiortc>=1.6"]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "build>=1.2", "twine>=5.0"]
 
 [tool.setuptools.packages.find]
