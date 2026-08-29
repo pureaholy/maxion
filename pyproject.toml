@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "maxion"
+version = "0.1.0"
+description = "Клиент мессенджера MAX: юзербот-библиотека на Python"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "PureAholy", email = "prec1zedev@gmail.com" }]
+keywords = ["max", "messenger", "userbot", "client", "oneme", "async"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Chat",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "websockets>=12.0",
+    "aiohttp>=3.9",
+    "msgpack>=1.0",
+    "lz4>=4.3",
+]
+
+[project.optional-dependencies]
+# Инструменты разбора протокола лежат в репозитории (tools/), в пакет не входят.
+re = ["mitmproxy>=10.0", "androguard>=4.1"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "build>=1.2", "twine>=5.0"]
+
+[tool.setuptools.packages.find]
+# Только сама библиотека. tools/ — репозиторный тулкит: занимать им
+# generic-имя `tools` в чужих окружениях нельзя.
+include = ["maxion*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

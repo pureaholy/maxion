@@ -1,0 +1,45 @@
+# окружение и кеши
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# сборка и публикация
+build/
+dist/
+*.egg-info/
+
+# сессии: внутри токен аккаунта
+*.session
+*.session-journal
+
+# дампы трафика: внутри переписка
+*.jsonl
+dump/
+downloads/
+
+# APK и прочие бинарники для разбора — большие, в репозиторий не нужны
+*.apk
+*.dex
+
+# то, что генерируется тулкитом
+docs/opcodes.md
+docs/schema.json
+docs/schema-live.md
+maxion/raw/methods/generated.py
+
+# IDE
+.idea/
+.vscode/
+
+# --- разбор приложения: в репозиторий не идёт ---
+# Тулкит реверса и снятые с APK эталоны остаются локально.
+tools/
+docs/
+tests/test_tools.py
+tests/test_mitm_addon.py
+tests/test_opcodes_apk.py
+tests/test_payloads_apk.py
