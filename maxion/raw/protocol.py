@@ -143,6 +143,11 @@ class Packet:
         if len(buffer) < total:
             return None, 0
         body = bytes(buffer[HEADER_SIZE:total])
+        if not body:
+            # Пустое тело — законный ответ, а не обрыв: так сервер отвечает,
+            # например, на PING. Снято с живого api.oneme.ru, кадр целиком:
+            # 0a 01 0002 0001 00 000000.
+            return cls(ver=ver, cmd=cmd, seq=seq, opcode=opcode, payload={}), total
         if cof:
             body = _lz4_decompress(body, cof)
         try:

@@ -122,3 +122,45 @@ def test_parse_markdown_link():
     link = elements[0]
     assert link["url"] == "https://max.ru"
     assert body[link["from"] : link["from"] + link["length"]] == "доки"
+
+
+def test_empty_body_is_a_valid_frame():
+    """Пустое тело — законный ответ сервера, а не обрыв потока.
+
+    Кадр снят с живого api.oneme.ru: так приходит ответ на PING.
+    """
+    raw = bytes.fromhex("0a010002000100000000")
+
+    packet = Packet.from_bytes(raw)
+
+    assert packet.ver == 10
+    assert packet.cmd == 1
+    assert packet.seq == 2
+    assert packet.opcode == Opcode.PING
+    assert packet.payload == {}
+
+
+def test_both_forms_of_empty_payload_read_the_same():
+    """Сервер шлёт пустой payload нулевой длиной, мы — как msgpack-карту.
+
+    Оба варианта законны и должны читаться одинаково.
+    """
+    ours = Packet(opcode=Opcode.PING, payload={}, seq=2, cmd=1, ver=10).to_bytes()
+    theirs = bytes.fromhex("0a010002000100000000")
+
+    assert ours.hex() == "0a01000200010000000180"   # длина 1, тело 0x80
+    assert Packet.from_bytes(ours).payload == {}
+    assert Packet.from_bytes(theirs).payload == {}
+
+
+def test_empty_body_does_not_stall_the_stream():
+    """После пустого кадра разбор следующего должен продолжиться."""
+    empty = bytes.fromhex("0a010002000100000000")
+    following = Packet(opcode=Opcode.CHATS_LIST, payload={"marker": 5}, seq=3, ver=10).to_bytes()
+
+    packet, consumed = Packet.parse_stream(empty + following)
+    assert packet.opcode == Opcode.PING and consumed == len(empty)
+
+    packet, consumed = Packet.parse_stream((empty + following)[consumed:])
+    assert packet.opcode == Opcode.CHATS_LIST
+    assert packet.payload == {"marker": 5}
