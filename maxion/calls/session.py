@@ -179,8 +179,13 @@ class CallSession:
         if not signal.candidate:
             return
         candidate = self._candidate_from_sdp(signal.candidate.replace("candidate:", "", 1))
-        candidate.sdpMid = signal.sdp_mid
-        candidate.sdpMLineIndex = signal.sdp_mline_index
+        # OK externcalls шлёт кандидата без sdpMid/sdpMLineIndex, а aiortc
+        # требует хотя бы один. При BUNDLE (один транспорт на все медиа)
+        # первая m-line годится: sdpMid="0", sdpMLineIndex=0.
+        candidate.sdpMid = signal.sdp_mid if signal.sdp_mid is not None else "0"
+        candidate.sdpMLineIndex = (
+            signal.sdp_mline_index if signal.sdp_mline_index is not None else 0
+        )
         await self.pc.addIceCandidate(candidate)
 
     # --- жизненный цикл ----------------------------------------------------

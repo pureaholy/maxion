@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "maxion"
-version = "0.1.4"
+version = "0.1.5"
 description = "Клиент мессенджера MAX: юзербот-библиотека на Python"
 readme = "README.md"
 requires-python = ">=3.10"

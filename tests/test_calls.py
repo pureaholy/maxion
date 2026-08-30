@@ -289,3 +289,105 @@ def test_ok_custom_data_carries_stats():
     msg = Commands().custom_data({"sdk": {"rtt": 0.0, "loss": 0.0}})
     assert msg["command"] == "custom-data"
     assert msg["data"]["sdk"]["rtt"] == 0.0
+
+
+# --- Call: замыкание сигнализации на медиа ---------------------------------
+
+@requires_aiortc
+async def test_call_routes_server_sdp_into_media_and_answers_back():
+    """Входящий offer из канала -> WebRTC -> answer уходит через transmit-data.
+
+    Канал и медиа настоящие (aiortc), но сокета нет: подменяем OkRtcChannel
+    накопителем отправленных команд и вручную подаём сообщения сервера.
+    """
+    from maxion.calls import CallConfig
+    from maxion.calls.call import Call
+    from maxion.calls.okrtc import Commands, parse_message
+    from aiortc import RTCPeerConnection
+    from aiortc.mediastreams import AudioStreamTrack
+
+    class FakeChannel:
+        def __init__(self):
+            self.commands = Commands()
+            self.sent = []
+        async def send(self, m): self.sent.append(m)
+        async def close(self): pass
+
+    cfg = CallConfig(token="t", signaling_url="wss://x/ws2")
+    call = Call(cfg, conversation_id="c1", peer_id=7)
+
+    # готовим сессию и подменённый канал вручную (минуя сеть)
+    from maxion.calls.session import CallSession
+    call.session = CallSession(on_signal=call._on_local_signal)
+    call.session.add_track(AudioStreamTrack())
+    call.channel = FakeChannel()
+
+    # генерим настоящий offer другой сессией и подаём его как серверный
+    offerer = RTCPeerConnection()
+    offerer.addTrack(AudioStreamTrack())
+    offer = await offerer.createOffer()
+    await offerer.setLocalDescription(offer)
+
+    server_msg = parse_message({
+        "peerId": {"id": 41827132202, "type": "WEB_TRANSPORT"},
+        "data": {"sdp": {"type": "offer", "sdp": offerer.localDescription.sdp}},
+    })
+    await call._handle(server_msg)
+
+    # answer должен уйти в канал командой transmit-data с data.sdp
+    sdp_out = [m for m in call.channel.sent if m.get("command") == "transmit-data"
+               and "sdp" in m.get("data", {})]
+    assert sdp_out, "answer не ушёл в канал"
+    assert sdp_out[0]["participantId"] == 41827132202
+    assert sdp_out[0]["participantType"] == "WEB_TRANSPORT"
+    assert sdp_out[0]["data"]["sdp"]["sdp"].startswith("v=0")
+
+    await offerer.close()
+    await call.session.close()
+
+
+@requires_aiortc
+async def test_call_feeds_ice_candidate_from_channel():
+    from maxion.calls import CallConfig
+    from maxion.calls.call import Call
+    from maxion.calls.okrtc import Commands, parse_message
+    from maxion.calls.session import CallSession
+
+    class FakeChannel:
+        def __init__(self): self.commands = Commands(); self.sent = []
+        async def send(self, m): self.sent.append(m)
+        async def close(self): pass
+
+    call = Call(CallConfig(token="t", signaling_url="wss://x/ws2"),
+                conversation_id="c1", peer_id=7)
+    call.session = CallSession(on_signal=call._on_local_signal)
+    call.channel = FakeChannel()
+
+    # ICE до SDP — aiortc буферизует, ошибки быть не должно
+    msg = parse_message({
+        "peerId": {"id": 42, "type": "USER"},
+        "data": {"candidate": {"candidate":
+            "candidate:1 1 udp 2130706431 192.0.2.1 12345 typ host"}},
+    })
+    await call._handle(msg)          # не должно бросить
+    assert call._remote_participant == 42
+    await call.session.close()
+
+
+def test_incoming_call_builds_from_notif(monkeypatch):
+    """Call.incoming собирает звонок из NOTIF_CALL_START с vcp."""
+    from maxion.calls import CallConfig
+    from maxion.calls.call import Call
+
+    class FakeStart:
+        conversation_id = "conv-1"
+        caller_id = 199383792
+        is_video = False
+        def config(self):
+            return CallConfig(token="tok", signaling_url="wss://videowebrtc.okcdn.ru/ws2",
+                              stun="stun:1.2.3.4:19302")
+
+    call = Call.incoming(FakeStart())
+    assert call.conversation_id == "conv-1"
+    assert call.peer_id == 199383792
+    assert call.config.signaling_url.endswith("/ws2")

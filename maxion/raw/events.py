@@ -227,9 +227,45 @@ class YouReacted(Update):
 
 
 class CallStart(Update):
-    """NOTIF_CALL_START (137)."""
+    """NOTIF_CALL_START (137) — входящий звонок.
+
+    Поля сверены с живым звонком 26.29.1: ``callerId``, ``chatId``,
+    ``conversationId``, ``type`` (AUDIO|VIDEO) и ``vcp`` — упакованные
+    параметры WebRTC (адрес канала, токен, STUN/TURN).
+    """
 
     event = "call"
+
+    @property
+    def conversation_id(self) -> str | None:
+        value = self.payload.get("conversationId")
+        return str(value) if value is not None else None
+
+    @property
+    def caller_id(self) -> int | None:
+        value = self.payload.get("callerId")
+        return int(value) if value is not None else None
+
+    @property
+    def type(self) -> str | None:
+        return self.payload.get("type")
+
+    @property
+    def is_video(self) -> bool:
+        return self.payload.get("type") == "VIDEO"
+
+    @property
+    def vcp(self) -> str | None:
+        """Сырое поле ``vcp``; разбирается :func:`maxion.calls.parse_vcp`."""
+        return self.payload.get("vcp")
+
+    def config(self):
+        """Разбирает ``vcp`` в :class:`~maxion.calls.signaling.CallConfig`."""
+        from ..calls import parse_vcp
+
+        if not self.vcp:
+            return None
+        return parse_vcp(self.vcp)
 
 
 class CallHistoryUpdate(Update):

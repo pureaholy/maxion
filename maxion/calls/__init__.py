@@ -47,14 +47,19 @@ __all__ = [
     "media_settings",
     "OkRtcChannel",
     "CallSession",
+    "Call",
 ]
 
 
 def __getattr__(name: str):
-    # CallSession тянет aiortc — импортируем лениво, чтобы signaling работал
-    # и без установленного extra.
+    # CallSession/Call тянут aiortc — импортируем лениво, чтобы signaling
+    # работал и без установленного extra.
     if name == "CallSession":
         from .session import CallSession
 
         return CallSession
+    if name == "Call":
+        from .call import Call
+
+        return Call
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
