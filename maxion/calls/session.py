@@ -117,12 +117,37 @@ class CallSession:
 
     async def add_microphone(self, device: str | None = None) -> None:
         """Добавляет аудио с микрофона (кодек Opus)."""
-        from aiortc.contrib.media import MediaPlayer
-
-        opts = {} if device else {}
-        player = self._open_player(device or self._default_mic(), opts)
+        player = self._open_player(device or self._default_mic(), {})
         if player.audio:
             self.pc.addTrack(player.audio)
+
+    async def add_camera(
+        self, device: str | None = None, *, size: str | None = None, fps: int | None = None
+    ) -> None:
+        """Добавляет видео с камеры (кодек VP8/H264 — что согласует aiortc).
+
+        Видео-звонок в MAX идёт по тому же каналу; сервер предлагает VP8 и
+        H264 (проверено по SDP из дампа). ``size`` — например ``"1280x720"``,
+        ``fps`` — частота кадров.
+        """
+        opts: dict[str, str] = {}
+        if size:
+            opts["video_size"] = size
+        if fps:
+            opts["framerate"] = str(fps)
+        player = self._open_player(device or self._default_camera(), opts, video=True)
+        if player.video:
+            self.pc.addTrack(player.video)
+
+    async def add_media_file(self, path: str) -> None:
+        """Добавляет аудио и видео из файла (для видео-звонка из ролика)."""
+        from aiortc.contrib.media import MediaPlayer
+
+        player = MediaPlayer(path)
+        if player.audio:
+            self.pc.addTrack(player.audio)
+        if player.video:
+            self.pc.addTrack(player.video)
 
     def add_track(self, track: Any) -> None:
         """Добавляет произвольный aiortc-трек (например из ``MediaPlayer``)."""
@@ -221,14 +246,29 @@ class CallSession:
             "darwin": ":0",
         }.get(sys.platform, "default")
 
-    def _open_player(self, source: str, opts: dict[str, str]):
+    @staticmethod
+    def _default_camera() -> str:
+        import sys
+
+        return {
+            "win32": "video=Integrated Camera",
+            "darwin": "default:none",
+            "linux": "/dev/video0",
+        }.get(sys.platform, "/dev/video0")
+
+    def _open_player(self, source: str, opts: dict[str, str], *, video: bool = False):
         from aiortc.contrib.media import MediaPlayer
 
         import sys
 
-        fmt = {"win32": "dshow", "darwin": "avfoundation", "linux": "pulse"}.get(
-            sys.platform
-        )
+        if video:
+            fmt = {"win32": "dshow", "darwin": "avfoundation", "linux": "v4l2"}.get(
+                sys.platform
+            )
+        else:
+            fmt = {"win32": "dshow", "darwin": "avfoundation", "linux": "pulse"}.get(
+                sys.platform
+            )
         return MediaPlayer(source, format=fmt, options=opts)
 
 

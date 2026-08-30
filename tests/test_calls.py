@@ -391,3 +391,68 @@ def test_incoming_call_builds_from_notif(monkeypatch):
     assert call.conversation_id == "conv-1"
     assert call.peer_id == 199383792
     assert call.config.signaling_url.endswith("/ws2")
+
+
+# --- видео: тот же канал, isVideoEnabled + видео-трек -----------------------
+
+
+def test_media_settings_video_flag():
+    from maxion.calls import media_settings
+
+    audio_call = media_settings(audio=True, video=False)
+    assert audio_call["isVideoEnabled"] is False
+
+    video_call = media_settings(audio=True, video=True)
+    assert video_call["isVideoEnabled"] is True
+    assert video_call["isAudioEnabled"] is True
+
+
+def test_change_media_settings_announces_video():
+    from maxion.calls import Commands, media_settings
+
+    msg = Commands().change_media_settings(media_settings(video=True))
+    assert msg["command"] == "change-media-settings"
+    assert msg["mediaSettings"]["isVideoEnabled"] is True
+
+
+@requires_aiortc
+async def test_call_answer_camera_sets_video_and_adds_track():
+    """camera=True добавляет видео-трек и объявляет isVideoEnabled."""
+    from maxion.calls import CallConfig
+    from maxion.calls.call import Call
+
+    sent = []
+
+    class FakeChannel:
+        def __init__(self):
+            from maxion.calls.okrtc import Commands
+            self.commands = Commands()
+        async def send(self, m): sent.append(m)
+        async def close(self): pass
+
+    added = {"video": False}
+
+    call = Call(CallConfig(token="t", signaling_url="wss://x/ws2"),
+                conversation_id="c", peer_id=7)
+
+    # подменяем connect и камеру, чтобы не трогать сеть и железо
+    import maxion.calls.call as callmod
+    orig_connect = callmod.OkRtcChannel.connect
+
+    async def fake_connect(cfg, **kw): return FakeChannel()
+    callmod.OkRtcChannel.connect = staticmethod(fake_connect)
+
+    from maxion.calls.session import CallSession
+    async def fake_camera(self, *a, **k): added["video"] = True
+    CallSession.add_camera = fake_camera  # type: ignore
+
+    try:
+        await call.answer(camera=True)
+        assert call.video is True
+        assert added["video"] is True
+        # change-media-settings ушло с видео
+        cms = [m for m in sent if m.get("command") == "change-media-settings"]
+        assert cms and cms[0]["mediaSettings"]["isVideoEnabled"] is True
+    finally:
+        callmod.OkRtcChannel.connect = orig_connect
+        await call.hangup()

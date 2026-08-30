@@ -83,21 +83,33 @@ class Call:
         *,
         audio: Any = None,
         microphone: bool = False,
+        camera: bool = False,
+        media_file: str | None = None,
     ) -> None:
         """Отвечает на звонок и начинает медиа-обмен.
 
         :param audio: файл или aiortc-трек как источник звука; ``None`` —
             без исходящего звука (только слушать).
-        :param microphone: взять звук с микрофона вместо файла.
+        :param microphone: взять звук с микрофона.
+        :param camera: добавить видео с камеры (видео-звонок). Протокол тот же,
+            сервер согласует VP8/H264.
+        :param media_file: взять аудио и видео из одного файла (ролик).
         """
         self.session = CallSession(
             ice_servers=self.config.ice_servers(),
             on_signal=self._on_local_signal,
         )
-        if microphone:
-            await self.session.add_microphone()
-        elif audio is not None:
-            self._add_audio_source(audio)
+        if media_file:
+            await self.session.add_media_file(media_file)
+            self.video = True
+        else:
+            if microphone:
+                await self.session.add_microphone()
+            elif audio is not None:
+                self._add_audio_source(audio)
+            if camera:
+                await self.session.add_camera()
+                self.video = True
 
         self.channel = await OkRtcChannel.connect(
             self.config,
