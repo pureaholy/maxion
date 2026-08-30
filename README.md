@@ -1,15 +1,15 @@
 # maxion
 
-Библиотека-клиент мессенджера **MAX** на Python: работа от лица обычного
-аккаунта, а не через Bot API.
+Библиотека-клиент мессенджера **MAX** на Python. Покрывает всё сразу:
 
-Два слоя:
-
-1. **Высокий** — `Client`, `filters`, `types`, `handlers`: обработчики с
-   фильтрами, группы и управление распространением события, модели со
-   связанными методами.
-2. **Низкий** — `maxion.raw`: все 153 опкода внутреннего протокола, транспорт
-   и кадры, сверенные с APK `ru.oneme.app` 26.29.1. Доступен как `app.raw`.
+- **Userbot** — работа от лица обычного аккаунта: удобный `Client` (обработчики,
+  фильтры, модели со связанными методами) поверх `maxion.raw` — все 153
+  вызываемых опкода внутреннего протокола, сверенные с APK `ru.oneme.app`
+  26.29.1.
+- **Bot API** — официальные боты через REST `botapi.max.ru` (`maxion.bot`),
+  токен бота, long polling и webhook.
+- **Звонки** — аудио и видео на WebRTC (`maxion.calls`, extra `maxion[calls]`):
+  сигнализация и медиа-инфраструктура сняты с живого звонка.
 
 ## Установка
 
@@ -45,9 +45,8 @@ app.run()
 | типы | `Message`, `Chat`, `User`, `ChatMember`, `Dialog`, `MessageEntity` с связанными методами (`message.reply`, `.edit_text`, `.delete`, `.forward`, `.download`) |
 | методы | `send_message`, `send_photo`, `send_video`, `send_document`, `edit_message_text`, `delete_messages`, `forward_messages`, `get_chat`, `get_chat_history`, `get_dialogs`, `get_users`, `get_chat_members`, `promote_chat_member`, `ban_chat_member`, `pin_chat_message`, `download_media`, `send_chat_action`, … |
 | разметка | `ParseMode.MARKDOWN` (по умолчанию), `ParseMode.HTML`, `ParseMode.DISABLED` |
+| звонки | `maxion.calls`: `Call.incoming(...).answer(microphone=True / camera=True)`, `parse_vcp`, `CallSession`, `OkRtcChannel` — аудио и видео на WebRTC |
 | ошибки | `RPCError`, `FloodWait` (с `.value`), `Unauthorized`, `SessionPasswordNeeded` |
-
-Чего нет в самом MAX, того нет и здесь.
 
 ## Bot API (боты)
 
@@ -302,32 +301,34 @@ payload сняты с самого клиента `ru.oneme.app` 26.29.1 (versio
 ## Примеры
 
 ```bash
-python examples/echo_bot.py +79991234567          # юзербот: /ping, /id, /echo, реакции
+python examples/maxion_bot.py                     # userbot: команды, фильтры, связанные методы
+python examples/echo_bot.py +79991234567          # userbot: /ping, /id, /echo, реакции
+python examples/bot_echo.py <TOKEN>               # официальный бот на Bot API
+python examples/answer_call.py                    # приём входящего звонка (maxion[calls])
 python examples/dump_account.py --history <chat>  # выгрузка чатов, контактов, сессий, истории
 python examples/send_media.py <chat> cat.jpg      # отправка медиа и скачивание вложений
 python examples/stories_feed.py --details --view  # лента историй: посмотреть и отметить
-python examples/raw_explorer.py                   # консоль опкодов, копит дамп для infer_schema
 ```
 
-`stories_feed.py` и `raw_explorer.py` умеют складывать сырые ответы в JSONL
-(`--dump`) — их сразу можно скормить `tools/infer_schema.py` и уточнить схемы
-тех опкодов, у которых поля пока выведены по соглашениям.
+`stories_feed.py` умеет складывать сырые ответы в JSONL (`--dump`) — их сразу
+можно скормить `tools/infer_schema.py` и уточнить схемы тех опкодов, у которых
+поля пока выведены по соглашениям.
 
 ## Структура
 
 ```
-maxion/raw/
-  protocol.py     кадрирование обоих транспортов
-  opcodes.py      все 182 опкода
-  enums.py        строковые перечисления протокола
-  client.py       соединение, RPC, диспетчеризация, реконнект
-  session.py      токен + deviceId на диске
-  transport/      ws.py (JSON) и tcp.py (MsgPack+LZ4)
-  methods/        обёртки опкодов по доменам
-  types/          модели: Chat, Message, User, Attach, …
-  events.py       NOTIF_* → типизированные события
-  filters.py      фильтры обработчиков
-  router.py       регистрация и доставка
+maxion/
+  client.py       userbot Client, types, filters, handlers, parser
+  raw/            низкий слой протокола
+    protocol.py     кадрирование обоих транспортов
+    opcodes.py      все 182 опкода
+    client.py       соединение, RPC, диспетчеризация, реконнект
+    transport/      ws.py (JSON) и tcp.py (MsgPack+LZ4)
+    methods/        обёртки опкодов по доменам
+    types/          модели: Chat, Message, User, Attach, …
+    events.py       NOTIF_* → типизированные события
+  bot/            официальный Bot API: Bot, updates, filters, types
+  calls/          звонки: signaling, okrtc, session (aiortc), Call
 ```
 
 ## Тесты
@@ -335,11 +336,3 @@ maxion/raw/
 ```bash
 pytest -q
 ```
-
-## Оговорки
-
-API внутренний и недокументированный: имена полей и номера опкодов меняются
-вместе с версией приложения. Когда что-то отвалилось — снимите свежий дамп и
-прогоните `tools/`, это ровно тот сценарий, под который тулкит и написан.
-Автоматизация чужих аккаунтов и рассылки нарушают правила сервиса; используйте
-на своём аккаунте и на свой риск.
