@@ -49,6 +49,35 @@ app.run()
 
 Чего нет в самом MAX, того нет и здесь.
 
+## Bot API (боты)
+
+Кроме userbot-клиента, есть отдельный слой для **официальных ботов** —
+`maxion.bot`. Работает по документированному REST `botapi.max.ru` с токеном
+бота (у @MasterBot), номер телефона не нужен:
+
+```python
+from maxion.bot import Bot, filters
+
+bot = Bot("<token>")
+
+@bot.on_message(filters.command("start"))
+async def start(bot, update):
+    await update.reply("Привет! Я на maxion.")
+
+@bot.on_callback(filters.payload("yes"))
+async def yes(bot, update):
+    await update.answer("Принято")
+
+bot.run()
+```
+
+39 методов: `send_message`, `edit_message`, `get_chats`, `get_members`,
+`add_members`, `pin_message`, `answer_callback`, `upload`, `set_commands`,
+подписки-webhook (`subscribe`) и long polling (`polling`/`run`). Обновления:
+`message`, `callback`, `bot_started`, `bot_added`, `edited_message`,
+`user_added` и др. Фильтры: `command`, `text`, `regex`, `payload`, `chat`,
+`from_user` с операторами `& | ~`.
+
 ## Ниже уровнем
 
 Любой опкод доступен напрямую, минуя высокий слой:

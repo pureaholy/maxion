@@ -21,7 +21,7 @@
   ``app.raw``, произвольный опкод — через ``app.invoke()``.
 """
 
-from . import enums, errors, filters, handlers, raw, types
+from . import bot, enums, errors, filters, handlers, raw, types
 from .client import Client, ContinuePropagation, StopPropagation, compose, idle
 from .enums import (
     ChatAction,
@@ -55,6 +55,7 @@ __all__ = [
     "errors",
     "handlers",
     "raw",
+    "bot",
     # типы
     "User",
     "Chat",
