@@ -49,5 +49,14 @@ async def on_button(bot, update):
 
 
 if __name__ == "__main__":
-    print("Бот запущен (Ctrl+C — выход).")
+    import asyncio
+
+    # По умолчанию — long polling. Для webhook раскомментируйте и укажите
+    # публичный HTTPS-адрес (например через reverse-proxy):
+    #
+    #   asyncio.run(bot.run_webhook(
+    #       port=8080, path="/webhook", secret="my-secret",
+    #       register_url="https://example.com/webhook",
+    #   ))
+    print("Бот запущен через long polling (Ctrl+C — выход).")
     bot.run()

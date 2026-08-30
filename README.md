@@ -72,7 +72,9 @@ bot.run()
 
 39 методов: `send_message`, `edit_message`, `get_chats`, `get_members`,
 `add_members`, `pin_message`, `answer_callback`, `upload`, `set_commands`,
-подписки-webhook (`subscribe`) и long polling (`polling`/`run`). Обновления:
+два способа получать обновления: **long polling** (`polling`/`run`) и
+**webhook** — встроенный приёмник `run_webhook(...)` плюс `subscribe`/
+`feed_update`. Обновления:
 `message`, `callback`, `bot_started`, `bot_added`, `edited_message`,
 `user_added` и др. Фильтры: `command`, `text`, `regex`, `payload`, `chat`,
 `from_user` с операторами `& | ~`.

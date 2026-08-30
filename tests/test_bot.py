@@ -221,3 +221,41 @@ async def test_filter_operators():
         await bot._dispatch(u)
     await asyncio.sleep(0.05)
     assert hits == ["обычный"]
+
+
+# --- webhook ---------------------------------------------------------------
+
+
+async def test_feed_update_dispatches_like_polling():
+    """Приёмник webhook раздаёт обновления теми же обработчиками."""
+    bot = make_bot({})
+    seen = []
+
+    @bot.on_message(filters.command("hi"))
+    async def hi(b, update):
+        seen.append(update.text)
+
+    # как будто POST от MAX прилетел с одним update
+    await bot.feed_update({
+        "update_type": "message_created",
+        "message": {"body": {"text": "/hi there"}, "recipient": {"chat_id": -1}},
+    })
+    for _ in range(20):
+        await asyncio.sleep(0.01)
+        if seen:
+            break
+    assert seen == ["/hi there"]
+
+
+async def test_subscribe_unsubscribe_calls():
+    bot = make_bot({("POST", "/subscriptions"): {"success": True},
+                    ("DELETE", "/subscriptions"): {"success": True}})
+    await bot.subscribe("https://ex.com/wh", update_types=["message_created"], secret="s")
+    sub = bot._session.calls[-1]  # type: ignore[attr-defined]
+    assert sub["path"] == "/subscriptions"
+    assert sub["json"]["url"] == "https://ex.com/wh"
+    assert sub["json"]["update_types"] == ["message_created"]
+    assert sub["json"]["secret"] == "s"
+
+    await bot.unsubscribe("https://ex.com/wh")
+    assert bot._session.calls[-1]["params"]["url"] == "https://ex.com/wh"  # type: ignore[attr-defined]

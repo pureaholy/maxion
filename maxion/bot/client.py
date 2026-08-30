@@ -346,6 +346,78 @@ class Bot:
         """DELETE /subscriptions."""
         return await self.request("DELETE", "/subscriptions", params={"url": url})
 
+    # --- обновления: webhook -----------------------------------------------
+
+    async def feed_update(self, raw: dict[str, Any]) -> None:
+        """Скармливает один сырой update обработчикам.
+
+        Для своего HTTP-сервера: приняли POST от MAX, распарсили JSON — сюда.
+        """
+        await self._dispatch(parse_update(self, raw))
+
+    async def run_webhook(
+        self,
+        *,
+        host: str = "0.0.0.0",
+        port: int = 8080,
+        path: str = "/webhook",
+        secret: str | None = None,
+        register_url: str | None = None,
+        update_types: Sequence[str] | None = None,
+    ) -> None:
+        """Поднимает встроенный HTTP-сервер приёма webhook и раздаёт обновления.
+
+        MAX шлёт обновления POST'ом на ``register_url`` (публичный адрес этого
+        сервера). Если он задан — подписка регистрируется автоматически.
+
+        :param secret: если задан, проверяется заголовок ``X-Max-Bot-Api-Secret``.
+        :param register_url: публичный URL для ``POST /subscriptions``; ``None`` —
+            подписку регистрируете сами (напр. через reverse-proxy).
+        """
+        try:
+            from aiohttp import web
+        except ImportError as exc:  # pragma: no cover
+            raise RuntimeError("для webhook нужен aiohttp") from exc
+
+        await self.get_me()
+
+        async def handle(request):
+            if secret and request.headers.get("X-Max-Bot-Api-Secret") != secret:
+                return web.Response(status=403, text="bad secret")
+            try:
+                raw = await request.json()
+            except Exception:
+                return web.Response(status=400, text="bad json")
+            # MAX может слать как один update, так и {"updates": [...]}
+            items = raw.get("updates") if isinstance(raw, dict) and "updates" in raw else [raw]
+            for item in items:
+                if isinstance(item, dict):
+                    await self.feed_update(item)
+            return web.Response(text="ok")
+
+        app = web.Application()
+        app.router.add_post(path, handle)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, host, port)
+        await site.start()
+
+        if register_url:
+            await self.subscribe(register_url, update_types=update_types, secret=secret)
+        log.info(
+            "бот @%s: webhook на http://%s:%s%s",
+            self.me.username if self.me else "?", host, port, path,
+        )
+        try:
+            await asyncio.Event().wait()  # держим сервер живым
+        finally:
+            if register_url:
+                try:
+                    await self.unsubscribe(register_url)
+                except Exception:
+                    pass
+            await runner.cleanup()
+
     # --- обновления: long polling ------------------------------------------
 
     async def get_updates(
